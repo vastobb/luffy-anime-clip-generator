@@ -14,12 +14,12 @@ math (bezier / capsules / FK rig)  ->  cel masks (PIL + numpy)  ->  ffmpeg  ->  
 
 ## Demo
 
-![Luffy procedural reel](https://github.com/vastobb/luffy-anime-clip-generator/releases/download/clip-4/luffy_reel.gif)
+![Luffy episode short](https://github.com/vastobb/luffy-anime-clip-generator/releases/download/clip-5/episode.gif)
 
-All five scenes, rendered by the workflow in this repo
-([clip-4](https://github.com/vastobb/luffy-anime-clip-generator/releases/tag/clip-4)):
-1280x720, 22.5 s of animation built from 270 hand-plotted drawings, 24 fps on
-twos, 3.7 MB - no AI model involved anywhere.
+The `episode` short from [clip-5](https://github.com/vastobb/luffy-anime-clip-generator/releases/tag/clip-5) —
+6 shots cut together (establishing pan -> talking medium -> eye close-up ->
+Gear Second whip-pan -> impact close-up -> sunset ending), 1280x720, 12.2 s from
+146 drawings shot on twos at 24 fps, rendered in 4.9 minutes on a stock runner.
 
 ## How a frame is made (the same way a cel is painted)
 
