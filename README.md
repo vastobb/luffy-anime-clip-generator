@@ -63,6 +63,25 @@ Everything is deterministic: the same `--seed` reproduces the same clip
 | `marine_chase` | 4.0 s, loops | run cycle on a scrolling deck, cannonball splashes, dust puffs, camera shake |
 | `sunny_figurehead` | 5.0 s, loops | calm establishing shot: clouds, god-rays, seagulls, sea sparkles, slow zoom-in |
 | `sunset_silhouette` | 5.0 s, loops | ending-shot look: silhouette with a warm rim light against a sunset, reflection column, birds |
+| `episode` | 12.2 s, one-shot | **the cut-together short** — 6 shots, camera work, hard cuts and broadcast compositing (below) |
+
+### The `episode` short — six shots
+
+| # | shot | duration | what the camera does |
+| --- | --- | --- | --- |
+| 1 | establishing wide, boy on the deck | 2.6 s | slow pan right + push-in, fade up from black |
+| 2 | medium, he talks to the crew | 2.2 s | push-in to 1.24x, talking mouth beats, torso twist, a blink |
+| 3 | eye close-up | 0.9 s | 2.65x zoom on the face, rising speed lines, blink, flash into the cut |
+| 4 | Gear Second burst | 2.4 s | whip-pan across the deck, roll + shake, red aura, steam, speed lines |
+| 5 | impact close-up | 1.5 s | **camera rides the incoming fist**, impact star, shockwave rings, impact frames |
+| 6 | sunset ending | 2.6 s | slow tilt up, rim-lit silhouette, hat tip, flare, fade to black |
+
+Camera work is analytic: `Cel.set_camera(zoom, look_at, roll)` remaps every polygon
+at the mask choke point, so a 2.6x close-up is still drawn at full resolution —
+no resampling, no blur. Acting beats (blinks, mouth shapes, hair strands, cloth
+follow-through) plus compositing (bloom/light-wrap, anamorphic flare, warm/cool
+grades, vignette, film grain, white impact flashes on the cut) are what turn the
+loops into something that reads like broadcast anime.
 
 ## Run it in the cloud
 
@@ -110,7 +129,8 @@ luffy_clip/vec.py         vector math: beziers, splines, capsules, easing, FK
 luffy_clip/cel.py         cel canvas: masks, second tone, ink outlines, textures
 luffy_clip/rig.py         the character: proportions, palette, poses, faces
 luffy_clip/bg.py          skies, sea, deck, speed lines, impact stars, steam
-luffy_clip/scenes.py      five scene timelines (pose keys + FX choreography)
+luffy_clip/scenes.py      looping scene timelines (pose keys + FX choreography)
+luffy_clip/episode.py     the 6-shot short: staging, camera moves, cuts, compositing
 luffy_clip/render.py      frame loop -> mp4/gif (draw rate vs playback rate)
 luffy_clip/postprocess.py ffmpeg helpers + dependency-free MP4 probing
 luffy_clip/cli.py         command line entry point

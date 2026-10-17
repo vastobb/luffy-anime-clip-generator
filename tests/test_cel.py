@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from luffy_clip.cel import Cel, shade, tint
 
 
@@ -61,3 +63,24 @@ def test_erode_shrinks():
 def test_shade_and_tint_helpers():
     assert shade((200, 100, 50), 0.5) == (100, 50, 25)
     assert tint((0, 0, 0), 1.0, (255, 255, 255)) == (255, 255, 255)
+
+
+def test_camera_pans_zooms_and_rolls():
+    from luffy_clip.vec import rotate
+
+    cel = Cel(200, 100, ss=1)
+    # 1) no camera == identity
+    assert cel.map((10.0, 20.0)) == (10.0, 20.0)
+
+    # 2) the look-at point lands exactly at the frame centre
+    cel.set_camera(zoom=2.0, look_at=(40.0, 30.0))
+    assert cel.map((40.0, 30.0)) == (100.0, 50.0)
+
+    # 3) zoom scales the distance from the look-at point
+    assert cel.map((50.0, 30.0)) == (120.0, 50.0)
+
+    # 4) roll rotates around the look-at point
+    cel.set_camera(zoom=1.0, look_at=(100.0, 50.0), roll=math.pi / 2)
+    mapped = cel.map((120.0, 50.0))
+    assert abs(mapped[0] - 100.0) < 1e-9 and abs(mapped[1] - 70.0) < 1e-9
+    rotate  # silence linters about the unused import

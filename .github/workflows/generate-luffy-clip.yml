@@ -4,16 +4,17 @@ name: Generate Luffy Clip
 # (PIL masks + numpy) and encodes it with ffmpeg. No AI models, no downloads.
 # Drawings are made at --draw-rate (12/s) and shot at --fps (24/s) => "on twos",
 # exactly how hand-drawn anime is filmed.
-run-name: "Luffy clip - ${{ inputs.scene }} (${{ inputs.width }}x${{ inputs.height }})"
+run-name: "Luffy anime - ${{ inputs.scene }} @ ${{ inputs.resolution }}"
 
 on:
   workflow_dispatch:
     inputs:
       scene:
-        description: Scene to render ('all' stitches every scene into one reel)
+        description: Scene to render ('episode' = the cut-together short, 'all' = every scene as a reel)
         type: choice
-        default: all
+        default: episode
         options:
+          - episode
           - all
           - gear_second
           - gum_gum_pistol

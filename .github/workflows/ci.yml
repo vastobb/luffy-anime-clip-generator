@@ -38,11 +38,13 @@ jobs:
           python -m luffy_clip.cli --help
           python -c "from luffy_clip.scenes import scene_names; print(scene_names())"
 
-      - name: Render 3-frame smoke clip
+      - name: Render smoke clips (scene engine + episode camera)
         run: |
           python -m luffy_clip.cli --scene gear_second --seconds 0.25 --draw-rate 12 \
             --width 320 --height 180 --supersample 1 --no-progress --out smoke
-          ls -la smoke smoke/*.gif
+          python -m luffy_clip.cli --scene episode --seconds 2.0 --draw-rate 12 \
+            --width 320 --height 180 --supersample 1 --no-progress --out smoke-episode
+          ls -la smoke smoke/*.gif smoke-episode smoke-episode/*.mp4
 
       - name: Validate workflow files
         run: |

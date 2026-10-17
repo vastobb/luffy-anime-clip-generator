@@ -383,12 +383,20 @@ def scene_sunset_silhouette(cel: Cel, t: float, frame: int, rng) -> None:
     cel.vignette(0.40)
 
 
+def _render_episode(cel: Cel, t: float, frame: int, rng) -> None:
+    """Cut-together short: 6 shots with camera work (see episode.py)."""
+    from .episode import render_episode
+
+    render_episode(cel, t, frame, rng)
+
+
 SCENES: Dict[str, Scene] = {
     "gear_second": Scene("gear_second", "Gear Second burst", 4.0, False, scene_gear_second),
     "gum_gum_pistol": Scene("gum_gum_pistol", "Gum-Gum Pistol", 4.5, False, scene_gum_gum_pistol),
     "marine_chase": Scene("marine_chase", "Marine chase run", 4.0, True, scene_marine_chase),
     "sunny_figurehead": Scene("sunny_figurehead", "On the figurehead", 5.0, True, scene_sunny_figurehead),
     "sunset_silhouette": Scene("sunset_silhouette", "Sunset silhouette", 5.0, True, scene_sunset_silhouette),
+    "episode": Scene("episode", "Episode short (6 shots, camera + cuts)", 12.2, False, _render_episode),
 }
 
 

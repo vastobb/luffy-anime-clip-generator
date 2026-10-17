@@ -20,6 +20,7 @@ from .vec import (
     Vec,
     add,
     capsule,
+    rotate,
     catmull_rom,
     ellipse,
     mix,
@@ -85,6 +86,9 @@ class Pose:
     shake: Vec = (0.0, 0.0)
     squash: float = 1.0  # vertical squash/stretch of the whole body
     face: str = "determined"  # determined | smile | grin | shock
+    blink: float = 0.0  # 1.0 = eyes closed (two-frame blinks sell "alive")
+    mouth_shape: str = "auto"  # auto | line | smile | grin | talk | shock | open
+    strand_flow: float = 0.0  # wind phase for the front hair strands
     skin_tint: float = 0.0  # 0..1 -> lean towards the Gear Second glow colour
     sash_flow: float = 0.0  # phase of cloth flutter
     hair_flow: float = 0.0
@@ -163,10 +167,14 @@ class Rig:
         self.j["head"] = add(pelvis, mul(up(head_angle), 0.292 * S))
         self.j["head_angle"] = (head_angle, 0.0)  # type: ignore[assignment]
 
-        self.j["shoulder_front"] = add(add(pelvis, mul(up(lean), 0.198 * S)), mul(side(lean), 0.084 * S))
-        self.j["shoulder_back"] = add(add(pelvis, mul(up(lean), 0.196 * S)), mul(side(lean), -0.074 * S))
-        self.j["hip_front"] = add(add(pelvis, mul(up(lean), 0.010 * S)), mul(side(lean), 0.046 * S))
-        self.j["hip_back"] = add(add(pelvis, mul(up(lean), 0.008 * S)), mul(side(lean), -0.044 * S))
+        side_v = side(lean)
+        if p.twist:
+            side_v = rotate(side_v, p.twist * f)
+        back_lift = 0.010 * S * abs(math.sin(p.twist * 8.0))
+        self.j["shoulder_front"] = add(add(pelvis, mul(up(lean), 0.198 * S)), mul(side_v, 0.084 * S))
+        self.j["shoulder_back"] = add(add(pelvis, mul(up(lean), 0.196 * S + back_lift)), mul(side_v, -0.074 * S))
+        self.j["hip_front"] = add(add(pelvis, mul(up(lean), 0.010 * S)), mul(side_v, 0.046 * S))
+        self.j["hip_back"] = add(add(pelvis, mul(up(lean), 0.008 * S)), mul(side_v, -0.044 * S))
 
         def limb_angle(angle: float) -> float:
             return (math.pi - angle) if f < 0 else angle
@@ -512,6 +520,28 @@ class Rig:
             )
             cel.fill_blend(sheen.bake(), pal["hair_hi"], 0.55)
 
+        # wind-blown front strands - cheap secondary motion, very "anime"
+        for i, (sx, sy, ln) in enumerate(((0.064, -0.048, 0.050), (0.038, -0.056, 0.044), (-0.020, -0.058, 0.030))):
+            wob = math.sin(pose.strand_flow + i * 2.1) * 0.014
+            cel.stroke(
+                [
+                    p((sx, sy)),
+                    p((sx + 0.010 + wob, sy + ln * 0.55)),
+                    p((sx + 0.006 + wob * 1.8, sy + ln)),
+                ],
+                ink + (255,),
+                0.009 * HS,
+                smooth=8,
+            )
+        # long tail strand off the back of the head
+        wob = math.sin(pose.strand_flow * 0.8 + 1.3) * 0.02
+        cel.stroke(
+            [p((-0.086, -0.008)), p((-0.104 + wob, 0.030)), p((-0.096 + wob * 1.8, 0.066))],
+            ink + (255,),
+            0.010 * HS,
+            smooth=8,
+        )
+
         # ---- straw hat ----------------------------------------------------#
         brim = cel.mask()
         brim.polygon(ellipse(p((0.0, -0.078)), 0.176 * HS, 0.035 * HS, (-0.10 + pose.head_tilt) * self.facing))
@@ -584,7 +614,7 @@ class Rig:
         cel.stroke([p(brow_in), p(brow_out)], ink + (255,), 0.012 * HS, smooth=6)
         cel.stroke([p((-0.014, -0.030)), p((-0.054, -0.027))], ink + (255,), 0.011 * HS, smooth=6)
 
-        for cx, rx, ry in ((0.032, 0.030, 0.033), (-0.028, 0.023, 0.027)):
+        for cx, rx, ry in (() if pose.blink > 0.55 else ((0.032, 0.030, 0.033), (-0.028, 0.023, 0.027))):
             c = p((cx, eye_y))
             sclera = cel.mask()
             sclera.polygon(ellipse(c, rx * HS, ry * HS))
@@ -614,6 +644,15 @@ class Rig:
                 smooth=6,
             )
 
+        if pose.blink > 0.55:  # closed eyes: lash line + a small lash flick
+            for cx, rx, ry in ((0.032, 0.030, 0.033), (-0.028, 0.023, 0.027)):
+                cel.stroke(
+                    [p((cx - rx * 0.95, eye_y - 0.002)), p((cx, eye_y + ry * 0.55)), p((cx + rx * 0.95, eye_y - 0.004))],
+                    ink + (255,),
+                    0.012 * HS,
+                    smooth=10,
+                )
+
         # nose tick + cheek/jaw shading
         cel.stroke([p((0.064, 0.012)), p((0.072, 0.024))], (150, 104, 76, 220), 0.008 * HS, smooth=4)
         cel.stroke([p((-0.070, 0.004)), p((-0.062, 0.034))], (196, 140, 104, 150), 0.007 * HS, smooth=4)
@@ -624,10 +663,22 @@ class Rig:
         cel.stroke([add(scar_c, (-0.008 * HS, 0.008 * HS)), add(scar_c, (0.008 * HS, -0.002 * HS))], (186, 128, 96, 230), 0.005 * HS)
 
         # mouth
-        if pose.face in ("grin", "smile"):
+        shape = pose.mouth_shape if pose.mouth_shape != "auto" else pose.face
+        if shape == "talk":
+            mouth_c = p((0.034, 0.040))
+            open_m = cel.mask()
+            open_m.ellipse(mouth_c, 0.019 * HS, 0.024 * HS)
+            cel.fill(open_m.bake(), pal["mouth"])
+            cel.stroke(
+                [p((0.010, 0.028)), p((0.034, 0.024)), p((0.058, 0.030))],
+                ink + (255,),
+                0.007 * HS,
+                smooth=8,
+            )
+        elif shape in ("grin", "smile"):
             mouth_c = p((0.034, 0.038))
-            w = (0.058 if pose.face == "grin" else 0.032) * HS
-            h = (0.027 if pose.face == "grin" else 0.014) * HS
+            w = (0.058 if shape == "grin" else 0.032) * HS
+            h = (0.027 if shape == "grin" else 0.014) * HS
             mouth = cel.mask()
             mouth.polygon(
                 catmull_rom(
@@ -642,7 +693,7 @@ class Rig:
                 )
             )
             cel.fill(mouth.bake(), pal["mouth"])
-            if pose.face == "grin":
+            if shape == "grin":
                 teeth = cel.mask()
                 teeth.polygon(
                     catmull_rom(
@@ -657,7 +708,7 @@ class Rig:
                     )
                 )
                 cel.fill(teeth.bake(), (250, 248, 244))
-        elif pose.face == "shock":
+        elif shape in ("shock", "open"):
             mouth_c = p((0.038, 0.040))
             mouth = cel.mask()
             mouth.polygon(ellipse(mouth_c, 0.024 * HS, 0.030 * HS))

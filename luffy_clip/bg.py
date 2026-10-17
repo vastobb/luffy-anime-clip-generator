@@ -157,7 +157,7 @@ def sun_path(cel: Cel, center_x: float, horizon: float, width0: float, width1: f
 # --------------------------------------------------------------------------- #
 # ship deck (perspective planks + railing)
 # --------------------------------------------------------------------------- #
-def deck(cel: Cel, horizon: float, wood: Color = (206, 158, 96), wood_dark: Color = (172, 126, 72), wood_line: Color = (120, 84, 46), vp_x: Optional[float] = None, scroll: float = 0.0) -> None:
+def deck(cel: Cel, horizon: float, wood: Color = (216, 178, 130), wood_dark: Color = (198, 160, 114), wood_line: Color = (142, 108, 72), vp_x: Optional[float] = None, scroll: float = 0.0) -> None:
     vp = cel.w * 0.5 if vp_x is None else vp_x
     h = cel.h
     band = cel.mask()
@@ -193,10 +193,10 @@ def deck(cel: Cel, horizon: float, wood: Color = (206, 158, 96), wood_dark: Colo
         x_near = vp + (base - 0.5) * cel.w * 4.0
         h_thickness = 2 + 6 * base
         m.polygon([(x_far - cel.w * 0.5, y), (x_far + cel.w * 0.5, y), (x_near + cel.w * 0.5, y + h_thickness), (x_near - cel.w * 0.5, y + h_thickness)])
-        cel.fill_blend(m.bake(), wood_line, 0.35 + 0.3 * base)
+        cel.fill_blend(m.bake(), wood_line, 0.20 + 0.18 * base)
 
 
-def railing(cel: Cel, y: float, color: Color = (188, 142, 86), post: Color = (150, 108, 62), scroll: float = 0.0) -> None:
+def railing(cel: Cel, y: float, color: Color = (206, 168, 118), post: Color = (176, 138, 92), scroll: float = 0.0) -> None:
     rail = cel.mask()
     rail.polygon([(-20, y), (cel.w + 20, y), (cel.w + 20, y + 7), (-20, y + 7)])
     cel.fill_blend(rail.bake(), color, 1.0)

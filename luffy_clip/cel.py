@@ -37,7 +37,9 @@ class Mask:
     # -- primitives ------------------------------------------------------- #
     def _pts(self, points: Iterable[Vec]) -> List[Tuple[float, float]]:
         s = self.ss
-        return [(p[0] * s, p[1] * s) for p in points]
+        # every polygon in the project funnels through here, so applying the
+        # camera mapping at this single choke point moves *all* geometry
+        return [(p[0] * s, p[1] * s) for p in (self.cel.map(pt) for pt in points)]
 
     def polygon(self, points: Iterable[Vec]) -> "Mask":
         self.draw.polygon(self._pts(points), fill=255)
@@ -110,9 +112,32 @@ class Cel:
     ):
         self.w, self.h, self.ss = width, height, ss
         self.palette: Dict[str, Color] = dict(palette or {})
+        self.camera: Optional[Tuple[float, Vec, float]] = None
         self.img = Image.new("RGB", (width, height), background)
         self.detail = Image.new("RGBA", (width * ss, height * ss), (0, 0, 0, 0))
         self.detail_draw = ImageDraw.Draw(self.detail)
+
+    # -- camera ------------------------------------------------------------#
+    def set_camera(self, zoom: float = 1.0, look_at: Optional[Vec] = None, roll: float = 0.0) -> None:
+        """Pan/zoom/roll camera, applied analytically to every shape.
+
+        ``look_at`` is the canvas point that ends up at the frame centre.
+        Because it is analytic (no resampling) a close-up stays razor sharp.
+        """
+        self.camera = (float(zoom), look_at or (self.w / 2.0, self.h / 2.0), float(roll))
+
+    def map(self, point: Vec) -> Vec:
+        if self.camera is None:
+            return point
+        zoom, (cx, cy), roll = self.camera
+        if zoom == 1.0 and roll == 0.0 and (cx, cy) == (self.w / 2.0, self.h / 2.0):
+            return point
+        dx, dy = point[0] - cx, point[1] - cy
+        c, s = math.cos(roll), math.sin(roll)
+        return ((dx * c - dy * s) * zoom + self.w / 2.0, (dx * s + dy * c) * zoom + self.h / 2.0)
+
+    def map_many(self, points: Iterable[Vec]) -> List[Vec]:
+        return [self.map(p) for p in points]
 
     # -- masks ------------------------------------------------------------ #
     def mask(self) -> Mask:
@@ -200,7 +225,7 @@ class Cel:
         if smooth > 0:
             pts = catmull_rom(points, samples=smooth, closed=False)
         s = self.ss
-        scaled = [(p[0] * s, p[1] * s) for p in pts]
+        scaled = [(p[0] * s, p[1] * s) for p in self.map_many(pts)]
         w = max(1, int(round(width * s)))
         if len(scaled) == 1:
             x, y = scaled[0]
@@ -266,6 +291,33 @@ class Cel:
     def flash(self, color: Color = (255, 255, 255), alpha: float = 1.0, jag: bool = False) -> None:
         layer = Image.new("RGB", (self.w, self.h), color)
         self.img = Image.blend(self.img, layer, min(1.0, max(0.0, alpha)))
+
+    def bloom(self, threshold: int = 208, radius: float = 16.0, alpha: float = 0.32, color: Color = (255, 250, 238)) -> None:
+        """Screen-blend a blurred bright pass - the anime "light wrap" glow."""
+        luma = np.asarray(self.img.convert("L"), dtype=np.int16)
+        bright = np.where(luma > threshold, 255, 0).astype(np.uint8)
+        mask = Image.fromarray(bright, "L").filter(ImageFilter.GaussianBlur(radius))
+        mask = mask.point(lambda v: int(v * alpha))
+        glow = Image.new("RGB", self.img.size, color)
+        lights = Image.composite(glow, Image.new("RGB", self.img.size, (0, 0, 0)), mask)
+        self.img = ImageChops.screen(self.img, lights)
+
+    def lens_flare(self, center: Vec, length: float, alpha: float = 0.55, color: Color = (255, 246, 214)) -> None:
+        """Horizontal anamorphic streak + ghosting - establishing-shot candy."""
+        layer = Image.new("RGB", self.img.size, (0, 0, 0))
+        draw = ImageDraw.Draw(layer)
+        tone = tuple(int(c * alpha) for c in color)
+        x, y = center
+        draw.ellipse([x - length, y - 4, x + length, y + 4], fill=tone)
+        for i, (frac, size) in enumerate(((0.35, 26), (0.68, 16), (1.05, 12))):
+            gx = x + (x - self.w / 2) * frac * 0.5
+            gy = y + (y - self.h / 2) * frac * 0.5
+            draw.ellipse([gx - size, gy - size * 0.6, gx + size, gy + size * 0.6], fill=tuple(int(c * alpha * 0.35) for c in color))
+        self.img = ImageChops.screen(self.img, layer.filter(ImageFilter.GaussianBlur(7)))
+
+    def grade(self, color: Color, alpha: float = 0.22) -> None:
+        solid = Image.new("RGB", self.img.size, color)
+        self.img = Image.blend(self.img, ImageChops.multiply(self.img, solid), alpha)
 
     def letterbox_bars(self, height_frac: float = 0.0, color: Color = (0, 0, 0)) -> None:
         if height_frac <= 0:
