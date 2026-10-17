@@ -1,133 +1,120 @@
-# 🏴‍☠️ Luffy Anime Clip Generator
+# 🏴‍☠️ Luffy Anime Clip Generator — procedural cel animation
 
-Turn a text prompt into a short **Monkey D. Luffy–style anime clip** — generated
-entirely in the cloud by **GitHub Actions**. No local installs, no model
-downloads, no GPU required on your machine.
+Anime-style clips of a straw-hat pirate boy, **drawn by math — not by an AI model**.
+Every frame is generated from vector geometry and rasterised into animation cels
+on a GitHub Actions runner, then encoded with ffmpeg. No models, no weights, no
+downloads, no GPU.
 
-> Fan-made generative experiment. One Piece and Monkey D. Luffy are ©
+```
+math (bezier / capsules / FK rig)  ->  cel masks (PIL + numpy)  ->  ffmpeg  ->  mp4 + gif
+```
+
+> Fan-made animation experiment. One Piece and Monkey D. Luffy are ©
 > Eiichiro Oda / Shueisha. Not affiliated with or endorsed by the rights holders.
 
-## Demo
+## How a frame is made (the same way a cel is painted)
 
-![Luffy clip demo](https://github.com/vastobb/luffy-anime-clip-generator/releases/download/clip-3/luffy_clip_run3.gif)
+1. **Rig** — the character is a parametric skeleton: pelvis → spine → head plus
+   two-bone arms and legs, solved with forward kinematics
+   ([`luffy_clip/rig.py`](luffy_clip/rig.py)). Proportions, palette, open red
+   vest, yellow sash with a fluttering tail, denim shorts, sandals, and the
+   straw hat (dome + red band + brim, including the shadow the brim casts across
+   the forehead).
+2. **Cel masks** — each part is rasterised at `--supersample`× resolution and
+   downscaled with Lanczos, so silhouettes are anti-aliased
+   ([`luffy_clip/cel.py`](luffy_clip/cel.py)).
+3. **Second tone + ink line** — the shadow is a *crescent* (the mask minus a
+   shifted copy of itself, restricted to the shape) and the outline is a *band*
+   (the mask minus its eroded copy). That is literally how a cel is painted:
+   flat colour, second tone, inked line — which is why limbs keep clean outlines
+   where they join.
+4. **Animation** — poses are keyframed and blended with anime timing
+   (ease-out bursts, elastic snap-backs, holds), cycles are sine-driven, the
+   rubber arm is a bezier ribbon with **motion-smear ghost copies**, and every
+   effect is procedural: radial speed lines, impact stars, shockwaves, dust,
+   steam, cannonball splashes, spinning god-rays, sparkles, and even
+   impact-frame white flashes ([`luffy_clip/scenes.py`](luffy_clip/scenes.py),
+   [`luffy_clip/bg.py`](luffy_clip/bg.py)).
+5. **Shot on twos** — drawings are rendered at `draw_rate` 12/s and the mp4 is
+   encoded at 24 fps, so each drawing is held for two frames, exactly like
+   hand-drawn TV anime.
+6. **Encode** — ffmpeg (a static binary bundled by `imageio-ffmpeg`, since
+   GitHub runners no longer ship one) produces H.264/yuv420p/faststart MP4s and
+   small looping GIF previews.
 
-`sunny_figurehead` scene — 4 s, 768×512, 8 fps, rendered on a plain GitHub
-runner CPU with no secrets and no GPU → [release clip-3](https://github.com/vastobb/luffy-anime-clip-generator/releases/tag/clip-3)
-(MP4 + GIF + manifest).
-
-## How it works
-
-```
-workflow_dispatch  ->  GitHub runner  ->  generative text-to-video model  ->  mp4 + gif
-                        (ubuntu-latest)      hosted API  or  local CPU diffusion
-```
-
-1. You pick a scene preset (or type your own prompt) and press **Run workflow**.
-2. The runner generates the clip with one of two backends:
-   * **Hosted (best quality)** — a state-of-the-art text-to-video model called
-     through the [Hugging Face Inference Providers](https://huggingface.co/docs/inference-providers/tasks/text-to-video)
-     router: **Wan 2.2** (`Wan-AI/Wan2.2-TI2V-5B`), **LTX-Video** or
-     **HunyuanVideo** running on cloud GPUs. Needs an `HF_TOKEN` secret.
-   * **Free CPU fallback (zero setup)** — **AnimateDiff-Lightning** (4-step
-     distilled AnimateDiff) on top of an **anime SD1.5 checkpoint**, rendered on
-     the Actions runner itself. No secrets, no cost, smaller clips.
-3. The result (`mp4` + looping `gif` preview + `manifest.json` with prompt,
-   seed, parameters and sha256) is uploaded as a build artifact and optionally
-   attached to a **GitHub Release**, where the gif renders right in the browser.
-
-The anime look comes from the prompt tail in [`luffy_clip/prompts.py`](luffy_clip/prompts.py)
-(`2D anime style, cel-shaded animation, Eiichiro Oda inspired art style, ...`)
-plus a matching negative prompt, so even general-purpose video models produce a
-cel-shaded anime clip.
-
-## Quick start — free, no secrets
-
-**Actions → Generate Luffy Clip → Run workflow → Run workflow** (leave the
-defaults: `provider: auto`, `scene: gear_second`, `segments: 2`).
-
-Because no `HF_TOKEN` secret is configured, `auto` selects the free CPU
-renderer: ~2 clips of 2 s each, upscaled to 768×512, 8 fps, plus a GIF preview.
-Expect ~13 minutes on a standard runner (≈6 min per 2 s segment; model
-downloads are cached between runs). When it finishes, open the **clip-N**
-release — the GIF preview is embedded in the release notes, and the MP4 is
-attached as an asset.
-
-## Best quality — hosted models (optional)
-
-1. Create a Hugging Face token with the *Make calls to Inference Providers*
-   permission: [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens/new?ownUserPermissions=inference.serverless.write&tokenType=fineGrained).
-2. Add it to the repo: **Settings → Secrets and variables → Actions → New
-   repository secret** → name `HF_TOKEN`.
-3. Run the workflow again with `provider: auto` (or `hf`).
-
-| model | notes |
-| --- | --- |
-| `Wan-AI/Wan2.2-TI2V-5B` *(default)* | fast, 720p-class, excellent prompt following; available on `fal-ai` and `replicate` |
-| `Wan-AI/Wan2.1-T2V-1.3B` | cheapest/fastest hosted option (`fal-ai`) |
-| `Lightricks/LTX-Video-0.9.8-13B-distilled` | very fast, cinematic motion |
-| `tencent/HunyuanVideo` | highest fidelity of the set, slower / more credits |
-
-Hosted inference is billed to your Hugging Face account (free accounts get a
-small monthly credit; `fal-ai` and `replicate` also work with your own API keys
-through the same router). Generated clips are 24 fps / a few seconds depending
-on the provider.
+Everything is deterministic: the same `--seed` reproduces the same clip
+(`manifest.json` records sizes, durations and sha256 of every output).
 
 ## Scenes
 
-`gear_second`, `gear_fourth`, `gum_gum_pistol`, `sunny_figurehead`,
-`sunset_silhouette`, `meat_feast`, `laughing_sky`, `marine_chase`
+| scene | length | what happens |
+| --- | --- | --- |
+| `gear_second` | 4.0 s, one-shot | crouch wind-up → white activation flash → red aura, steam, radial speed lines, gear sprint |
+| `gum_gum_pistol` | 4.5 s, one-shot | rubber arm stretches at the camera with smear ghosts → impact star + shockwave rings + recoil snap |
+| `marine_chase` | 4.0 s, loops | run cycle on a scrolling deck, cannonball splashes, dust puffs, camera shake |
+| `sunny_figurehead` | 5.0 s, loops | calm establishing shot: clouds, god-rays, seagulls, sea sparkles, slow zoom-in |
+| `sunset_silhouette` | 5.0 s, loops | ending-shot look: silhouette with a warm rim light against a sunset, reflection column, birds |
 
-Or pass your own action with the `prompt` input / `--prompt` flag; the anime
-style tail is appended automatically.
+## Run it in the cloud
+
+**Actions → Generate Luffy Clip → Run workflow.** Inputs:
+
+| input | default | notes |
+| --- | --- | --- |
+| `scene` | `all` | any single scene, or `all` to stitch every scene into one **reel** |
+| `resolution` | `1280x720` | `1920x1080` and `960x540` also offered |
+| `supersample` | `2` | `3` gives crisper ink lines, ~1.6× slower |
+| `draw_rate` / `fps` | `12` / `24` | the "on twos" pair; `24`/`24` renders on ones |
+| `seconds` | `0` | `0` = use each scene's own timing |
+| `seed` | `42` | FX jitter / sparkles / dust |
+| `publish_release` | `true` | attach everything to a GitHub Release |
+
+Outputs per run: every scene as `mp4` + `gif`, a stitched `luffy_reel.mp4` +
+`luffy_reel.gif`, and `manifest.json`. All of it is uploaded as a build artifact
+and (optionally) published as a release whose page previews the GIF inline.
+
+Typical cost on a standard 4-vCPU runner: the full 22.5 s reel at 720p /
+supersample 2 is ~270 drawings ≈ 10–15 minutes; a single 4 s scene is ~2–3
+minutes. Nothing is installed or downloaded on your machine.
 
 ## CLI (same code the workflow runs)
 
 ```bash
-# free CPU backend
-python -m luffy_clip.cli --provider cpu --scene marine_chase --segments 2 --steps 4
-
-# hosted backend
-export HF_TOKEN=hf_...
-python -m luffy_clip.cli --provider hf --hf-provider fal-ai \
-  --model Wan-AI/Wan2.2-TI2V-5B --scene gear_fourth --hf-steps 8
-
-# custom prompt, 3 segments, no gif
-python -m luffy_clip.cli --provider cpu \
-  --prompt "Monkey D. Luffy fighting a giant sea king, dramatic waves" \
-  --segments 3 --no-gif
-```
-
-(If you *do* run it locally, the CPU backend downloads ~4 GB of model weights
-into `~/.cache/huggingface`; in Actions that happens on the runner, never on
-your machine.) Local setup:
-
-```bash
 python -m pip install -r requirements/base.txt
-python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-python -m pip install -r requirements/cpu.txt
+
+# whole reel, 720p
+python -m luffy_clip.cli --scene all --out out
+
+# one scene at 1080p with crisper lines
+python -m luffy_clip.cli --scene gum_gum_pistol --width 1920 --height 1080 \
+    --supersample 3 --out out
+
+# on ones (24 drawings/second) and a different seed
+python -m luffy_clip.cli --scene marine_chase --draw-rate 24 --fps 24 --seed 7
 ```
 
 ## Repository layout
 
 ```
-.github/workflows/generate-luffy-clip.yml   # the cloud generator (manual trigger)
-.github/workflows/ci.yml                    # tests + config validation
-luffy_clip/prompts.py                       # scene library, style + negative prompt
-luffy_clip/providers.py                     # HF router backend + CPU diffusion backend
-luffy_clip/postprocess.py                   # ffmpeg: frames->mp4, concat, gif, ffprobe
-luffy_clip/cli.py                           # argparse entry point + manifest writer
-scripts/make_release_notes.py               # renders the release page (inline gif)
-tests/                                      # pure-python tests (no torch, no network)
+luffy_clip/vec.py         vector math: beziers, splines, capsules, easing, FK
+luffy_clip/cel.py         cel canvas: masks, second tone, ink outlines, textures
+luffy_clip/rig.py         the character: proportions, palette, poses, faces
+luffy_clip/bg.py          skies, sea, deck, speed lines, impact stars, steam
+luffy_clip/scenes.py      five scene timelines (pose keys + FX choreography)
+luffy_clip/render.py      frame loop -> mp4/gif (draw rate vs playback rate)
+luffy_clip/postprocess.py ffmpeg helpers + dependency-free MP4 probing
+luffy_clip/cli.py         command line entry point
+scripts/make_release_notes.py  renders the release page (inline GIF + tables)
+.github/workflows/        generate-luffy-clip.yml (render) + ci.yml (tests)
+tests/                    math, cel, scene and renderer tests
 ```
 
-## Outputs
+## Tests
 
-Every run produces:
-
-* `luffy_clip_run<N>.mp4` — H.264 / yuv420p / faststart, plays in any browser
-* `luffy_clip_run<N>.gif` — small looping preview for READMEs and release notes
-* `manifest.json` — prompt, backend, model(s), seed, fps, resolution, duration,
-  sha256 — everything needed to reproduce the clip
+`python -m pytest -q` runs the math layer, cel-mask/outline behaviour, scene
+smoke tests (non-blank frames, real motion between frames), GIF-loop
+seamlessness, and renderer plumbing. CI also renders a 3-frame smoke clip with
+the real ffmpeg pipeline.
 
 ## License
 

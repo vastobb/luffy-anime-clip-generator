@@ -52,10 +52,23 @@ def _even_scale_filter(scale: int) -> str:
 
 
 def frames_to_mp4(
-    frames_dir: Path, out_mp4: Path, *, fps: int = 8, scale: int = 2, crf: int = 18
+    frames_dir: Path,
+    out_mp4: Path,
+    *,
+    fps: int = 8,
+    out_fps: Optional[int] = None,
+    scale: int = 2,
+    crf: int = 18,
 ) -> Path:
-    """Encode a ``frame_%04d.png`` sequence into a browser-friendly MP4."""
+    """Encode a ``frame_%04d.png`` sequence into a browser-friendly MP4.
+
+    ``fps`` is the rate the drawings were made at (12/s = anime "on twos"),
+    ``out_fps`` the playback rate (24/s): ffmpeg duplicates each drawing twice.
+    """
     out_mp4.parent.mkdir(parents=True, exist_ok=True)
+    filters = [_even_scale_filter(scale)]
+    if out_fps and int(out_fps) != int(fps):
+        filters.append("fps={}".format(int(out_fps)))
     _run(
         [
             ffmpeg_binary(),
@@ -65,7 +78,7 @@ def frames_to_mp4(
             "-i",
             frames_dir / "frame_%04d.png",
             "-vf",
-            _even_scale_filter(scale),
+            ",".join(filters),
             "-c:v",
             "libx264",
             "-preset",

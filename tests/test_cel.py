@@ -1,0 +1,61 @@
+"""Cel canvas tests: mask baking, fills, ink outlines, shading crescents."""
+
+from __future__ import annotations
+
+from luffy_clip.cel import Cel, shade, tint
+
+
+def _square_mask(cel: Cel, x0: int = 20, y0: int = 20, x1: int = 80, y1: int = 60):
+    m = cel.mask()
+    m.polygon([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
+    return m.bake()
+
+
+def test_mask_bakes_to_final_resolution():
+    cel = Cel(100, 80, ss=3)
+    mask = _square_mask(cel)
+    assert mask.size == (100, 80)
+    assert mask.getpixel((50, 40)) == 255
+    assert mask.getpixel((5, 5)) == 0
+
+
+def test_region_fills_base_colour_and_outline():
+    cel = Cel(100, 80, ss=2, background=(255, 255, 255))
+    mask = _square_mask(cel)
+    cel.region(mask, (200, 40, 40), outline=(0, 0, 0), outline_width=3)
+    img = cel.flatten(apply_detail=False)
+    assert img.getpixel((50, 40)) == (200, 40, 40)  # interior
+    edge = img.getpixel((21, 40))  # just inside the left edge
+    assert sum(edge) < 200  # ink line
+
+
+def test_inner_shadow_only_darkens_inside_the_mask():
+    cel = Cel(100, 80, ss=1, background=(255, 255, 255))
+    mask = _square_mask(cel)
+    shadow = Cel.inner_shadow(mask, 6, 6)
+    # a shifted crescent covers the top-left rim ...
+    assert shadow.getpixel((21, 21)) > 0
+    # ... but never leaks out of the silhouette
+    assert shadow.getpixel((5, 5)) == 0
+    assert shadow.getpixel((95, 70)) == 0
+
+
+def test_outline_band_is_a_band_not_a_fill():
+    cel = Cel(100, 80, ss=1)
+    mask = _square_mask(cel)
+    band = Cel.outline_band(mask, 4)
+    assert band.getpixel((50, 40)) == 0  # hollow middle
+    assert band.getpixel((21, 40)) == 255  # ink on the edge
+
+
+def test_erode_shrinks():
+    cel = Cel(100, 80, ss=1)
+    mask = _square_mask(cel)
+    eroded = Cel.erode(mask, 5)
+    assert eroded.getpixel((24, 24)) == 255
+    assert eroded.getpixel((21, 21)) == 0
+
+
+def test_shade_and_tint_helpers():
+    assert shade((200, 100, 50), 0.5) == (100, 50, 25)
+    assert tint((0, 0, 0), 1.0, (255, 255, 255)) == (255, 255, 255)

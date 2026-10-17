@@ -1,5 +1,5 @@
-# Lightweight runtime: only needed for the hosted (HF Inference Providers) path.
-huggingface_hub>=0.34,<2
-requests>=2.31
-# GitHub runners no longer ship ffmpeg on PATH - this bundles a static ffmpeg.
+# Runtime for the procedural renderer: pure maths, no models, no downloads.
+pillow>=10.0
+numpy>=1.26
+# GitHub runners no longer ship ffmpeg on PATH - this bundles a static binary.
 imageio-ffmpeg>=0.5
