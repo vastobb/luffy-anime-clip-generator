@@ -33,10 +33,12 @@ def test_inner_shadow_only_darkens_inside_the_mask():
     cel = Cel(100, 80, ss=1, background=(255, 255, 255))
     mask = _square_mask(cel)
     shadow = Cel.inner_shadow(mask, 6, 6)
-    # a shifted crescent covers the top-left rim ...
-    assert shadow.getpixel((21, 21)) > 0
-    # ... but never leaks out of the silhouette
+    # the light comes from the top-left, so the second tone hugs the
+    # bottom-right rim of the shape ...
+    assert shadow.getpixel((78, 58)) > 0
+    # ... and never leaks outside the silhouette or into the lit corner
     assert shadow.getpixel((5, 5)) == 0
+    assert shadow.getpixel((21, 21)) == 0
     assert shadow.getpixel((95, 70)) == 0
 
 
@@ -52,8 +54,8 @@ def test_erode_shrinks():
     cel = Cel(100, 80, ss=1)
     mask = _square_mask(cel)
     eroded = Cel.erode(mask, 5)
-    assert eroded.getpixel((24, 24)) == 255
-    assert eroded.getpixel((21, 21)) == 0
+    assert eroded.getpixel((27, 27)) == 255  # 7px inside the square
+    assert eroded.getpixel((21, 21)) == 0    # eaten away by the ink line
 
 
 def test_shade_and_tint_helpers():

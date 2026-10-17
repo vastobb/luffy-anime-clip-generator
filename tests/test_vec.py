@@ -49,7 +49,7 @@ def test_easing_functions_behave():
 
 def test_hold_and_pulse_windows():
     assert vec.hold(0.1, 0.2, 0.4) == 0.0
-    assert vec.hold(0.3, 0.2, 0.4) == 0.5
+    assert abs(vec.hold(0.3, 0.2, 0.4) - 0.5) < 1e-9
     assert vec.hold(0.9, 0.2, 0.4) == 1.0
     assert vec.pulse(0.0) == 0.0 and vec.pulse(1.0) == 0.0
     assert vec.pulse(0.5) > 0.9
@@ -64,5 +64,6 @@ def test_two_bone_lengths_are_exact():
 
 
 def test_rotate_and_mirror():
-    assert vec.rotate((1.0, 0.0), math.pi / 2) == (0.0, 1.0)
+    rotated = vec.rotate((1.0, 0.0), math.pi / 2)
+    assert abs(rotated[0]) < 1e-12 and abs(rotated[1] - 1.0) < 1e-12
     assert vec.mirror_many([(2.0, 1.0)], axis_x=0.0) == [(-2.0, 1.0)]
