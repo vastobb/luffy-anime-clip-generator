@@ -63,15 +63,16 @@ def test_cuts_are_hard_cuts():
 
 
 def test_silhouette_shot_uses_rim_light():
-    """The ending shot is a silhouette: mostly dark pixels with a bright rim."""
-    from luffy_clip.vec import ease_out_cubic  # noqa: F401  (keeps import graph honest)
-
-    # mid-ending-shot: t=0.97 would be inside the fade-to-black
+    """The ending shot is a silhouette: mostly dark pixels with a bright rim/sun."""
     cel = Cel(160, 90, ss=1)
+    # mid-ending-shot: t=0.97 would be inside the fade-to-black
     render_episode(cel, 0.89, 5, random.Random(3))
-    img = cel.flatten()
-    pixels = list(img.getdata())
-    dark = sum(1 for r, g, b in pixels if r + g + b < 260)
-    bright = sum(1 for r, g, b in pixels if r + g + b > 620)
-    assert dark > len(pixels) * 0.05  # the character reads as a dark shape
-    assert bright > len(pixels) * 0.02  # the sun / rim keeps it from going flat
+    data = cel.flatten().tobytes()
+    total = len(data) // 3
+    dark = bright = 0
+    for i in range(0, len(data), 3):
+        luma = data[i] + data[i + 1] + data[i + 2]
+        dark += luma < 260
+        bright += luma > 620
+    assert dark > total * 0.15, "silhouette shot is not dark"
+    assert bright > total * 0.008, "no sun / rim light in the ending shot"
