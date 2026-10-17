@@ -47,6 +47,30 @@ def _write_video_bytes(data: bytes, out_path: Path) -> int:
     return len(data)
 
 
+def _force_float32(pipe: Any, torch_module: Any) -> None:
+    """CPU inference needs fp32.
+
+    Several SD1.5 checkpoints (e.g. dreamlike-anime) are stored in fp16 and
+    diffusers infers that dtype from the repo config; PyTorch then refuses to
+    run ("Input type (c10::Half) and bias type (float) should be the same").
+    Casting every torch component explicitly afterwards is version-agnostic.
+    """
+    seen = set()
+    for name in (
+        "motion_adapter",
+        "unet",
+        "vae",
+        "text_encoder",
+        "text_encoder_2",
+        "image_encoder",
+        "transformer",
+    ):
+        module = getattr(pipe, name, None)
+        if isinstance(module, torch_module.nn.Module) and id(module) not in seen:
+            module.to(torch_module.float32)
+            seen.add(id(module))
+
+
 def generate_with_hf_router(
     prompt: str,
     out_path: Path,
@@ -182,14 +206,18 @@ def generate_with_cpu(
     )
 
     print("loading anime base model {}".format(base_model), flush=True)
-    # NOTE: no dtype kwarg on purpose - CPU wants float32 and the argument name
-    # changed across diffusers releases.
+    # NOTE: no dtype kwarg on purpose (its name changed across diffusers
+    # releases); we hard-cast every component to float32 afterwards instead.
     pipe = AnimateDiffPipeline.from_pretrained(base_model, motion_adapter=adapter)
     pipe = pipe.to(device)
+    _force_float32(pipe, torch)
     pipe.scheduler = EulerDiscreteScheduler.from_config(
         pipe.scheduler.config, timestep_spacing="trailing", beta_schedule="linear"
     )
-    if hasattr(pipe, "enable_vae_slicing"):
+    vae = getattr(pipe, "vae", None)
+    if vae is not None and hasattr(vae, "enable_slicing"):
+        vae.enable_slicing()
+    elif hasattr(pipe, "enable_vae_slicing"):
         pipe.enable_vae_slicing()
     if hasattr(pipe, "enable_attention_slicing"):
         pipe.enable_attention_slicing()

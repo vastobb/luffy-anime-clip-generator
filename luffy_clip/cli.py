@@ -23,7 +23,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from . import __version__, postprocess, providers
-from .prompts import DEFAULT_SCENE, NEGATIVE_PROMPT, build_prompt, list_scenes
+from .prompts import (
+    DEFAULT_SCENE,
+    NEGATIVE_PROMPT,
+    build_prompt,
+    clip_token_warning,
+    estimate_clip_tokens,
+    list_scenes,
+)
 
 
 def resolve_provider(requested: str, env: Optional[Dict[str, str]] = None) -> str:
@@ -181,6 +188,10 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
     negative = args.negative_prompt if args.negative_prompt is not None else NEGATIVE_PROMPT
     provider = resolve_provider(args.provider)
 
+    token_warning = clip_token_warning(prompt)
+    if token_warning:
+        print("warning: {}".format(token_warning), file=sys.stderr)
+
     manifest: Dict[str, Any] = {
         "tool": "luffy-anime-clip-generator",
         "tool_version": __version__,
@@ -189,6 +200,7 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
         "scene": "custom" if (args.prompt or "").strip() else args.scene,
         "prompt": prompt,
         "negative_prompt": negative,
+        "clip_token_estimate": estimate_clip_tokens(prompt),
         "seed": int(args.seed),
         "segments": segments,
         "fps": int(args.fps),

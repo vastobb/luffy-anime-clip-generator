@@ -7,10 +7,13 @@ import pytest
 from luffy_clip import cli
 from luffy_clip.prompts import (
     ANIME_STYLE,
+    CLIP_MAX_TOKENS,
     DEFAULT_SCENE,
     NEGATIVE_PROMPT,
     SCENES,
     build_prompt,
+    clip_token_warning,
+    estimate_clip_tokens,
     list_scenes,
     resolve_scene,
 )
@@ -52,6 +55,21 @@ def test_unknown_scene_raises_keyerror():
 
 def test_negative_prompt_is_populated():
     assert "watermark" in NEGATIVE_PROMPT
+
+
+def test_every_scene_fits_the_clip_window():
+    for name in list_scenes():
+        prompt = build_prompt(scene=name)
+        assert estimate_clip_tokens(prompt) <= CLIP_MAX_TOKENS, name
+        assert clip_token_warning(prompt) is None
+
+
+def test_long_prompt_triggers_clip_token_warning():
+    prompt = "Monkey D. Luffy " + "very dynamic anime action " * 30
+    warning = clip_token_warning(prompt)
+    assert warning is not None
+    assert str(CLIP_MAX_TOKENS) in warning
+    assert estimate_clip_tokens(prompt) > CLIP_MAX_TOKENS
 
 
 def test_resolve_provider_auto_prefers_hf_when_token_present():
