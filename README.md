@@ -7,6 +7,14 @@ downloads, no GPU required on your machine.
 > Fan-made generative experiment. One Piece and Monkey D. Luffy are ©
 > Eiichiro Oda / Shueisha. Not affiliated with or endorsed by the rights holders.
 
+## Demo
+
+![Luffy clip demo](https://github.com/vastobb/luffy-anime-clip-generator/releases/download/clip-3/luffy_clip_run3.gif)
+
+`sunny_figurehead` scene — 4 s, 768×512, 8 fps, rendered on a plain GitHub
+runner CPU with no secrets and no GPU → [release clip-3](https://github.com/vastobb/luffy-anime-clip-generator/releases/tag/clip-3)
+(MP4 + GIF + manifest).
+
 ## How it works
 
 ```
@@ -39,9 +47,10 @@ defaults: `provider: auto`, `scene: gear_second`, `segments: 2`).
 
 Because no `HF_TOKEN` secret is configured, `auto` selects the free CPU
 renderer: ~2 clips of 2 s each, upscaled to 768×512, 8 fps, plus a GIF preview.
-Expect ~10–25 minutes on a standard runner (model downloads are cached between
-runs). When it finishes, open the **clip-N** release — the GIF preview is
-embedded in the release notes, and the MP4 is attached as an asset.
+Expect ~13 minutes on a standard runner (≈6 min per 2 s segment; model
+downloads are cached between runs). When it finishes, open the **clip-N**
+release — the GIF preview is embedded in the release notes, and the MP4 is
+attached as an asset.
 
 ## Best quality — hosted models (optional)
 
