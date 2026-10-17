@@ -1,0 +1,195 @@
+name: Generate Luffy Clip
+
+# Cloud-only video generation: nothing has to be installed locally.
+# The runner either calls a hosted text-to-video model (Hugging Face Inference
+# Providers router) or - when no HF_TOKEN secret exists - renders a small clip
+# on its own CPU with AnimateDiff-Lightning + an anime SD1.5 checkpoint.
+run-name: "Luffy clip - ${{ inputs.scene }} (${{ inputs.provider }})"
+
+on:
+  workflow_dispatch:
+    inputs:
+      scene:
+        description: Luffy scene preset
+        type: choice
+        default: gear_second
+        options:
+          - gear_second
+          - gear_fourth
+          - gum_gum_pistol
+          - sunny_figurehead
+          - sunset_silhouette
+          - meat_feast
+          - laughing_sky
+          - marine_chase
+      prompt:
+        description: Custom action prompt (wins over the scene preset; leave empty to use it)
+        type: string
+        default: ""
+      provider:
+        description: Backend - auto = HF router when HF_TOKEN exists, else free CPU renderer
+        type: choice
+        default: auto
+        options:
+          - auto
+          - hf
+          - cpu
+      hf_provider:
+        description: HF Inference Provider to route through (hosted backend only)
+        type: choice
+        default: fal-ai
+        options:
+          - fal-ai
+          - replicate
+      model:
+        description: Text-to-video model (hosted backend only)
+        type: choice
+        default: Wan-AI/Wan2.2-TI2V-5B
+        options:
+          - Wan-AI/Wan2.2-TI2V-5B
+          - Wan-AI/Wan2.1-T2V-1.3B
+          - Lightricks/LTX-Video-0.9.8-13B-distilled
+          - tencent/HunyuanVideo
+      base_model:
+        description: Anime SD1.5 checkpoint (CPU backend only)
+        type: choice
+        default: dreamlike-art/dreamlike-anime-1.0
+        options:
+          - dreamlike-art/dreamlike-anime-1.0
+          - gsdf/Counterfeit-V2.5
+          - emilianJR/epiCRealism
+      seed:
+        description: Random seed
+        type: number
+        default: 42
+      segments:
+        description: Number of consecutive clips to render (length = segments * frames / fps)
+        type: number
+        default: 2
+      fps:
+        description: Playback frames per second
+        type: number
+        default: 8
+      steps:
+        description: Denoising steps for the CPU backend (1, 2, 4 or 8)
+        type: number
+        default: 4
+      scale:
+        description: ffmpeg upscale factor for the final mp4
+        type: number
+        default: 2
+      publish_release:
+        description: Attach the rendered clip to a GitHub Release
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: luffy-clip
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements/*.txt
+
+      - name: Install base dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements/base.txt
+
+      - name: Install CPU diffusion stack (only for the free backend)
+        env:
+          PROVIDER: ${{ inputs.provider }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "$PROVIDER" = "cpu" ] || { [ "$PROVIDER" = "auto" ] && [ -z "$HF_TOKEN" ]; }; then
+            echo "Installing torch (CPU wheels) + diffusers ..."
+            python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+            python -m pip install -r requirements/cpu.txt
+          else
+            echo "Hosted inference selected - skipping the local diffusion stack."
+          fi
+
+      - name: Cache Hugging Face models
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/huggingface
+          key: hf-models-${{ runner.os }}-${{ inputs.base_model }}-animatediff-lightning-v1
+
+      - name: Show environment
+        run: |
+          python --version
+          python -m pip --version
+          ffmpeg -version | head -n 1
+
+      - name: Generate the clip
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_HUB_DISABLE_TELEMETRY: "1"
+          PROVIDER: ${{ inputs.provider }}
+          HF_PROVIDER: ${{ inputs.hf_provider }}
+          MODEL: ${{ inputs.model }}
+          BASE_MODEL: ${{ inputs.base_model }}
+          SCENE: ${{ inputs.scene }}
+          PROMPT: ${{ inputs.prompt }}
+          SEED: ${{ inputs.seed }}
+          SEGMENTS: ${{ inputs.segments }}
+          FPS: ${{ inputs.fps }}
+          STEPS: ${{ inputs.steps }}
+          SCALE: ${{ inputs.scale }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          python -m luffy_clip.cli \
+            --provider "$PROVIDER" \
+            --hf-provider "$HF_PROVIDER" \
+            --model "$MODEL" \
+            --base-model "$BASE_MODEL" \
+            --scene "$SCENE" \
+            --prompt "$PROMPT" \
+            --seed "$SEED" \
+            --segments "$SEGMENTS" \
+            --fps "$FPS" \
+            --steps "$STEPS" \
+            --scale "$SCALE" \
+            --out "out/luffy_clip_run${{ github.run_number }}.mp4"
+
+      - name: Upload clip artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: luffy-clip-run-${{ github.run_number }}
+          path: |
+            out/*.mp4
+            out/*.gif
+            out/manifest.json
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: ${{ inputs.publish_release }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: clip-${{ github.run_number }}
+          RUN_NUMBER: ${{ github.run_number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          python scripts/make_release_notes.py > RELEASE_NOTES.md
+          gh release create "$TAG" \
+            --title "Luffy clip #$RUN_NUMBER - ${{ inputs.scene }}" \
+            --notes-file RELEASE_NOTES.md \
+            out/*.mp4 out/*.gif out/manifest.json

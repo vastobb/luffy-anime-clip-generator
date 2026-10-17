@@ -1,0 +1,3 @@
+# Lightweight runtime: only needed for the hosted (HF Inference Providers) path.
+huggingface_hub>=0.34,<2
+requests>=2.31
