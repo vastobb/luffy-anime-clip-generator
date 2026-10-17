@@ -12,6 +12,15 @@ math (bezier / capsules / FK rig)  ->  cel masks (PIL + numpy)  ->  ffmpeg  ->  
 > Fan-made animation experiment. One Piece and Monkey D. Luffy are ©
 > Eiichiro Oda / Shueisha. Not affiliated with or endorsed by the rights holders.
 
+## Demo
+
+![Luffy procedural reel](https://github.com/vastobb/luffy-anime-clip-generator/releases/download/clip-4/luffy_reel.gif)
+
+All five scenes, rendered by the workflow in this repo
+([clip-4](https://github.com/vastobb/luffy-anime-clip-generator/releases/tag/clip-4)):
+1280x720, 22.5 s of animation built from 270 hand-plotted drawings, 24 fps on
+twos, 3.7 MB - no AI model involved anywhere.
+
 ## How a frame is made (the same way a cel is painted)
 
 1. **Rig** — the character is a parametric skeleton: pelvis → spine → head plus
@@ -73,9 +82,10 @@ Outputs per run: every scene as `mp4` + `gif`, a stitched `luffy_reel.mp4` +
 `luffy_reel.gif`, and `manifest.json`. All of it is uploaded as a build artifact
 and (optionally) published as a release whose page previews the GIF inline.
 
-Typical cost on a standard 4-vCPU runner: the full 22.5 s reel at 720p /
-supersample 2 is ~270 drawings ≈ 10–15 minutes; a single 4 s scene is ~2–3
-minutes. Nothing is installed or downloaded on your machine.
+Measured on a standard 4-vCPU runner: the full 22.5 s reel at 720p /
+supersample 2 (270 drawings) took **11.5 minutes**; single scenes take 2–3
+minutes each, and the whole Python install is ~20 s (pillow, numpy and the
+bundled ffmpeg - no model weights, nothing downloaded to your machine).
 
 ## CLI (same code the workflow runs)
 
