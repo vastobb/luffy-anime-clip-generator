@@ -66,8 +66,9 @@ def test_silhouette_shot_uses_rim_light():
     """The ending shot is a silhouette: mostly dark pixels with a bright rim."""
     from luffy_clip.vec import ease_out_cubic  # noqa: F401  (keeps import graph honest)
 
+    # mid-ending-shot: t=0.97 would be inside the fade-to-black
     cel = Cel(160, 90, ss=1)
-    render_episode(cel, 0.97, 5, random.Random(3))
+    render_episode(cel, 0.89, 5, random.Random(3))
     img = cel.flatten()
     pixels = list(img.getdata())
     dark = sum(1 for r, g, b in pixels if r + g + b < 260)
