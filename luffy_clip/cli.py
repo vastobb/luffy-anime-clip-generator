@@ -284,6 +284,22 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
         )
 
     manifest["video"] = postprocess.probe_video(out_path)
+    if provider == "cpu":
+        # ffprobe may be unavailable; the CPU path knows these values exactly.
+        scale = max(1, int(args.scale))
+        video = manifest["video"]
+        for key, value in (
+            ("width", int(args.width) * scale),
+            ("height", int(args.height) * scale),
+            ("frame_rate", "{}/1".format(int(args.fps))),
+            ("frame_count", str(segments * int(args.frames))),
+            (
+                "duration_seconds",
+                round(segments * int(args.frames) / float(args.fps), 3),
+            ),
+        ):
+            if not video.get(key):
+                video[key] = value
     manifest["file_size_bytes"] = out_path.stat().st_size
     manifest["sha256"] = _sha256(out_path)
     manifest["gif"] = gif_path.name if gif_path else None

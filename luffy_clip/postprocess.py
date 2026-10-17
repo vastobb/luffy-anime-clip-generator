@@ -167,11 +167,99 @@ def mp4_to_gif(
     return dst
 
 
+def _box_iter(data: bytes, start: int, end: int):
+    """Yield ``(box_type, content_start, content_end)`` for ISO-BMFF boxes."""
+    position = start
+    while position + 8 <= end:
+        size = int.from_bytes(data[position : position + 4], "big")
+        box_type = data[position + 4 : position + 8]
+        header = 8
+        if size == 1:
+            if position + 16 > end:
+                return
+            size = int.from_bytes(data[position + 8 : position + 16], "big")
+            header = 16
+        elif size == 0:
+            size = end - position
+        if size < header or position + size > end:
+            return
+        yield box_type, position + header, position + size
+        position += size
+
+
+def probe_mp4_header(path: Path) -> Dict[str, object]:
+    """Read duration / resolution straight from the MP4 boxes (no dependencies)."""
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return {}
+
+    moov_index = data.find(b"moov")
+    if moov_index < 4:
+        return {}
+
+    result: Dict[str, object] = {"container": "mp4"}
+    moov_start = moov_index - 4
+    moov_size = int.from_bytes(data[moov_start : moov_start + 4], "big")
+    moov_end = len(data) if moov_size < 8 else min(len(data), moov_start + moov_size)
+
+    for box_type, start, end in _box_iter(data, moov_start + 8, moov_end):
+        if box_type == b"mvhd":
+            _read_mvhd(data, start, end, result)
+        elif box_type == b"trak":
+            for sub_type, sub_start, sub_end in _box_iter(data, start, end):
+                if sub_type == b"tkhd":
+                    _read_tkhd(data, sub_start, sub_end, result)
+
+    try:
+        result["size_bytes"] = path.stat().st_size
+    except OSError:
+        pass
+    return result
+
+
+def _read_mvhd(data: bytes, start: int, end: int, result: Dict[str, object]) -> None:
+    """Movie header: timescale + duration."""
+    version = data[start]
+    try:
+        if version == 1:
+            timescale = int.from_bytes(data[start + 20 : start + 24], "big")
+            duration = int.from_bytes(data[start + 24 : start + 32], "big")
+        else:
+            timescale = int.from_bytes(data[start + 12 : start + 16], "big")
+            duration = int.from_bytes(data[start + 16 : start + 20], "big")
+    except IndexError:  # pragma: no cover - truncated box
+        return
+    if timescale:
+        result["duration_seconds"] = round(duration / timescale, 3)
+    result["timescale"] = timescale
+
+
+def _read_tkhd(data: bytes, start: int, end: int, result: Dict[str, object]) -> None:
+    """Track header: width / height as 16.16 fixed point (video track only)."""
+    if result.get("width"):
+        return
+    version = data[start]
+    offset = 88 if version == 1 else 76
+    if start + offset + 8 > end:
+        return
+    width = int.from_bytes(data[start + offset : start + offset + 4], "big") / 65536
+    height = int.from_bytes(data[start + offset + 4 : start + offset + 8], "big") / 65536
+    if width and height:
+        result["width"] = int(round(width))
+        result["height"] = int(round(height))
+
+
 def probe_video(path: Path) -> Dict[str, object]:
-    """Return basic video metadata (empty dict when ffprobe is unavailable)."""
+    """Return basic video metadata.
+
+    Uses ffprobe when available; GitHub runners do not ship it any more, so we
+    fall back to a dependency-free MP4 header reader (exactly enough for the
+    mp4 files this project writes: faststart, so `moov` is at the front).
+    """
     probe = ffprobe_binary()
     if not probe:
-        return {}
+        return probe_mp4_header(path)
     process = subprocess.run(
         [
             probe,
